@@ -62,7 +62,7 @@ if section == "Dashboard":
     with col1:
         st.metric("Total Practice Attempts", database.get_total_practice_count())
     with col2:
-        st.metric("Streak", "TODO")  # TODO: implement true streak based on date continuity.
+        st.metric("Streak", database.get_practice_streak())
 
     avg_scores = database.get_average_scores_by_pillar()
     st.write("### Average Score by DMAIC Pillar")
@@ -170,7 +170,12 @@ elif section == "Review History":
         table_cols = ["response_id", "attempted_at", "pillar_name", "module_name", "title", "overall_score"]
         st.dataframe(pd.DataFrame(attempts)[table_cols], use_container_width=True)
         labels = [f"#{a['response_id']} | {a['attempted_at']} | {a['title']} | Score: {a.get('overall_score', 'N/A')}" for a in attempts]
-        selected = attempts[labels.index(st.selectbox("Select attempt", labels))]
+        if not labels:
+            st.warning("No selectable attempts available.")
+            st.stop()
+        label_to_attempt = dict(zip(labels, attempts))
+        selected_label = st.selectbox("Select attempt", labels)
+        selected = label_to_attempt[selected_label]
 
         st.write("### Attempt Detail")
         st.write("#### Scenario")
@@ -220,8 +225,9 @@ elif section == "Curriculum":
             for concept in module["concepts"]:
                 record = mastery_lookup.get(concept)
                 score = float(record["mastery_score"]) if record else 50.0
+                normalized = max(0.0, min(1.0, score / 100.0))
                 st.write(concept)
-                st.progress(int(score), text=f"Mastery: {score:.1f}")
+                st.progress(normalized, text=f"Mastery: {score:.1f}")
 
 else:
     st.subheader("Settings")

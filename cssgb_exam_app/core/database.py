@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -205,13 +205,17 @@ class DatabaseManager:
                 FROM evaluations e
                 JOIN responses r ON r.id = e.response_id
                 JOIN scenarios s ON s.id = r.scenario_id
-                WHERE s.primary_concepts_json LIKE ?
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM json_each(s.primary_concepts_json)
+                    WHERE json_each.value = ?
+                )
                 ORDER BY e.id DESC
                 LIMIT ?
                 """,
-                (f'%"{concept_name}"%', limit),
+                (concept_name, limit),
             )
-            return [int(row["overall_score"]) for row in cur.fetchall()]
+            return [int(row["overall_score"]) for row in cur.fetchall() if row["overall_score"] is not None]
 
     def get_concept_mastery_record(self, concept_name: str) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
@@ -266,6 +270,22 @@ class DatabaseManager:
             cur = conn.cursor()
             cur.execute("SELECT COUNT(1) AS c FROM responses")
             return int(cur.fetchone()["c"])
+
+    def get_practice_streak(self) -> int:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT DATE(created_at) AS activity_date FROM responses")
+            dates = {row["activity_date"] for row in cur.fetchall() if row["activity_date"]}
+
+        if not dates:
+            return 0
+
+        streak = 0
+        cursor_day = date.today()
+        while cursor_day.isoformat() in dates:
+            streak += 1
+            cursor_day -= timedelta(days=1)
+        return streak
 
     def get_recent_attempts(self, limit: int = 10, pillar_name: Optional[str] = None) -> List[Dict[str, Any]]:
         query = """

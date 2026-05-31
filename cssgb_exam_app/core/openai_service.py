@@ -16,7 +16,7 @@ class OpenAIService:
     def __init__(self, model: Optional[str] = None) -> None:
         self.model = model or DEFAULT_MODEL
         self.api_key = get_api_key()
-        self.mock_mode = get_mock_mode() if self.api_key is None else False
+        self.mock_mode = get_mock_mode()
         self.client = OpenAI(api_key=self.api_key) if self.api_key else None
 
     def update_model(self, model: str) -> None:
@@ -35,7 +35,8 @@ class OpenAIService:
             return self._mock_response(schema_name)
 
         if not self.client:
-            return {"error": "OpenAI client not configured. Falling back to mock mode is recommended."}
+            self.mock_mode = True
+            return self._mock_response(schema_name)
 
         try:
             response = self.client.chat.completions.create(
